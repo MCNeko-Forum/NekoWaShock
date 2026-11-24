@@ -154,7 +154,8 @@ static const int kHeight = 420;
 static void notifyHost(Plugin* p, int idx) {
     if (g_host && g_effect) {
         // opcode 1 = audioMasterAutomate
-        g_host(g_effect, 1, idx, 0, nullptr, p->param[idx]);
+        float v = (idx == P_SATURATION) ? p->param[idx] / 3.0f : p->param[idx];
+        g_host(g_effect, 1, idx, 0, nullptr, v);
     }
 }
 
@@ -437,9 +438,18 @@ static void doProcess(Plugin* p, float** in, float** out, VstInt32 n) {
     int satMode = (int)(p->param[P_SATURATION] + 0.5f);
     if (satMode < 0) satMode = 0;
     if (satMode > 3) satMode = 3;
-    // A=Default 直通，B=No saturation 直通，C/D 为两级饱和
-    float drive = (satMode == 2) ? 1.5f : (satMode == 3 ? 3.0f : 1.0f);
-    float norm  = 1.0f / softClip(drive);
+
+    // 各档驱动量 k 与输出补偿 trim。
+    // 关键：k * trim ≈ 1，使小信号增益接近 1（不会只是变响），
+    // 而大信号被 softClip 压缩，产生实际谐波。
+    float satK = 0.0f;
+    float satTrim = 1.0f;
+    switch (satMode) {
+        case 0:  satK = 2.5f;  satTrim = 0.420f; break; // A 默认：轻度过载
+        case 1:  satK = 0.0f;  satTrim = 1.000f; break; // B 不饱和：直通
+        case 2:  satK = 5.0f;  satTrim = 0.210f; break; // C 饱和 A
+        default: satK = 10.0f; satTrim = 0.105f; break; // D 饱和 B
+    }
 
     for (VstInt32 i = 0; i < n; i++) {
         gl += (targetL - gl) * k;
@@ -457,9 +467,9 @@ static void doProcess(Plugin* p, float** in, float** out, VstInt32 n) {
             r = m - s;
         }
 
-        if (satMode >= 2) {
-            l = softClip(l * drive) * norm;
-            r = softClip(r * drive) * norm;
+        if (satK > 0.0f) {
+            l = softClip(l * satK) * satTrim;
+            r = softClip(r * satK) * satTrim;
         }
 
         oL[i] = l;
@@ -567,14 +577,17 @@ static void vstProcessReplacing(AEffect* e, float** in, float** out, VstInt32 n)
 static void vstSetParameter(AEffect* e, VstInt32 index, float value) {
     Plugin* p = (Plugin*)e->object;
     if (p && index >= 0 && index < NUM_PARAMS) {
-        p->param[index] = value;
+        // 饱和模式内部为 0..3，宿主侧为 0..1
+        p->param[index] = (index == P_SATURATION) ? value * 3.0f : value;
         if (g_hwnd) InvalidateRect(g_hwnd, nullptr, FALSE);
     }
 }
 
 static float vstGetParameter(AEffect* e, VstInt32 index) {
     Plugin* p = (Plugin*)e->object;
-    if (p && index >= 0 && index < NUM_PARAMS) return p->param[index];
+    if (p && index >= 0 && index < NUM_PARAMS) {
+        return (index == P_SATURATION) ? p->param[index] / 3.0f : p->param[index];
+    }
     return 0.0f;
 }
 
