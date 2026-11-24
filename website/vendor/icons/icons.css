@@ -1,0 +1,19 @@
+/* Google Material Icons（本地托管，避免字体 CDN 不可达）
+   family 名称必须与 mdui-icon 的 name 后缀对应：
+   无后缀 / --filled -> "Material Icons"
+   --outlined        -> "Material Icons Outlined" */
+@font-face {
+  font-family: 'Material Icons';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url(material-icons.woff2) format('woff2');
+}
+
+@font-face {
+  font-family: 'Material Icons Outlined';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url(material-icons-outlined.woff2) format('woff2');
+}

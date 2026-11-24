@@ -1,0 +1,617 @@
+/* ============================================================
+   NekoWaShock 官网样式
+   基于 MDUI 的设计令牌，集中覆盖深色配色 + 页面布局
+   ============================================================ */
+
+/* ---------- 配色：把 MDUI 的深色主题换成红色系 ---------- */
+:root {
+  --mdui-color-primary-dark: 232, 56, 56;
+  --mdui-color-on-primary-dark: 255, 255, 255;
+  --mdui-color-primary-container-dark: 74, 20, 20;
+  --mdui-color-on-primary-container-dark: 255, 214, 214;
+
+  --mdui-color-surface-dark: 14, 12, 13;
+  --mdui-color-surface-dim-dark: 14, 12, 13;
+  --mdui-color-surface-bright-dark: 56, 50, 51;
+  --mdui-color-surface-container-lowest-dark: 10, 9, 10;
+  --mdui-color-surface-container-low-dark: 18, 16, 17;
+  --mdui-color-surface-container-dark: 24, 21, 22;
+  --mdui-color-surface-container-high-dark: 32, 28, 29;
+  --mdui-color-surface-container-highest-dark: 41, 36, 37;
+  --mdui-color-surface-variant-dark: 52, 45, 46;
+
+  --mdui-color-on-surface-dark: 237, 231, 232;
+  --mdui-color-on-surface-variant-dark: 176, 166, 168;
+  --mdui-color-on-surface-container-dark: 237, 231, 232;
+  --mdui-color-background-dark: 14, 12, 13;
+  --mdui-color-on-background-dark: 237, 231, 232;
+  --mdui-color-outline-dark: 138, 128, 130;
+  --mdui-color-outline-variant-dark: 62, 55, 56;
+  --mdui-color-shadow-dark: 0, 0, 0;
+
+  /* 页面自用的间距与尺寸 */
+  --page-max: 1080px;
+  --page-pad: 24px;
+  --gap: 20px;
+  --radius-card: 18px;
+  --radius-frame: 24px;
+  --accent: #e83838;
+  --accent-soft: rgba(232, 56, 56, 0.12);
+  --line: rgba(255, 255, 255, 0.08);
+  --muted: #a89ea0;
+}
+
+/* ---------- 基础 ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 88px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  color: rgb(var(--mdui-color-on-surface));
+  background-color: rgb(var(--mdui-color-background));
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 背景上的两团柔光，让深色不至于太死 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(760px 460px at 78% -10%, rgba(232, 56, 56, 0.16), transparent 70%),
+    radial-gradient(620px 420px at 6% 8%, rgba(232, 56, 56, 0.07), transparent 72%);
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1, h2, h3 {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+p {
+  margin: 0;
+}
+
+code {
+  font-family: Consolas, "SF Mono", "Courier New", monospace;
+  font-size: 0.92em;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(var(--mdui-color-surface-variant), 0.6);
+  color: rgb(var(--mdui-color-on-surface));
+}
+
+/* ---------- 布局容器 ---------- */
+.wrap {
+  width: 100%;
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding-inline: var(--page-pad);
+}
+
+.wrap-narrow {
+  max-width: 820px;
+}
+
+/* ---------- 顶栏 ---------- */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(14, 12, 13, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 64px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.brand-mark {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: block;
+}
+
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.site-nav a {
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 14px;
+  color: var(--muted);
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.site-nav a:hover,
+.site-nav a:focus-visible {
+  color: rgb(var(--mdui-color-on-surface));
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.header-inner mdui-button {
+  flex: none;
+}
+
+/* ---------- Hero ---------- */
+.hero {
+  padding: 88px 0 56px;
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1.02fr 0.98fr;
+  align-items: center;
+  gap: 64px;
+}
+
+.hero-chip {
+  margin-bottom: 24px;
+}
+
+.hero h1 {
+  font-size: clamp(40px, 5.6vw, 64px);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  margin-bottom: 24px;
+}
+
+.hero h1 em {
+  font-style: normal;
+  color: var(--accent);
+}
+
+.lead {
+  font-size: 17px;
+  line-height: 1.8;
+  color: var(--muted);
+  max-width: 34em;
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.meta-line {
+  margin-top: 20px;
+  font-size: 13px;
+  color: rgba(176, 166, 168, 0.75);
+}
+
+/* 截图 */
+.hero-shot {
+  margin: 0;
+}
+
+.shot-frame {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-frame);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015));
+  padding: 14px;
+  box-shadow:
+    0 30px 60px -28px rgba(0, 0, 0, 0.9),
+    0 0 0 1px rgba(232, 56, 56, 0.12),
+    0 0 90px -30px rgba(232, 56, 56, 0.55);
+}
+
+.shot-frame img {
+  display: block;
+  width: 100%;
+  border-radius: 14px;
+}
+
+.hero-shot figcaption {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 13px;
+  color: rgba(176, 166, 168, 0.8);
+}
+
+/* ---------- 通用区块 ---------- */
+.section {
+  padding: 96px 0;
+}
+
+.section-alt {
+  background: rgba(255, 255, 255, 0.022);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.section-head {
+  max-width: 640px;
+  margin-bottom: 48px;
+}
+
+.kicker {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.section-head h2,
+.download-main h2 {
+  font-size: clamp(28px, 3.4vw, 38px);
+  line-height: 1.2;
+  margin: 14px 0 14px;
+}
+
+.section-head p {
+  color: var(--muted);
+  line-height: 1.75;
+  max-width: 42em;
+}
+
+/* ---------- 网格 ---------- */
+.grid {
+  display: grid;
+  gap: var(--gap);
+}
+
+.grid-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* ---------- 特点卡片 ---------- */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: rgba(255, 255, 255, 0.028);
+  transition: border-color 0.2s, background-color 0.2s, transform 0.2s;
+}
+
+.card:hover {
+  border-color: rgba(232, 56, 56, 0.38);
+  background: rgba(255, 255, 255, 0.045);
+  transform: translateY(-2px);
+}
+
+.card-icon {
+  font-size: 26px;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.card h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.card p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+/* ---------- 档位 ---------- */
+.mode {
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: rgba(255, 255, 255, 0.028);
+}
+
+.mode-letter {
+  display: block;
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+
+.mode h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.mode p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+/* 小提示条 */
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 28px;
+  padding: 16px 20px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 12px 12px 0;
+  background: var(--accent-soft);
+}
+
+.note mdui-icon {
+  font-size: 20px;
+  color: var(--accent);
+  flex: none;
+  margin-top: 1px;
+}
+
+.note p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: rgb(var(--mdui-color-on-surface));
+}
+
+/* ---------- 三步 ---------- */
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 40px;
+}
+
+.steps li {
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.step-num {
+  display: block;
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1;
+  color: rgba(232, 56, 56, 0.45);
+  margin-bottom: 14px;
+}
+
+.steps h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.steps p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+/* ---------- FAQ ---------- */
+.faq {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.028);
+}
+
+.faq-body {
+  padding: 0 24px 20px 56px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--muted);
+}
+
+/* ---------- 下载 ---------- */
+.download-card {
+  display: grid;
+  grid-template-columns: 1.25fr auto 0.75fr;
+  align-items: center;
+  gap: 40px;
+  padding: 40px;
+  border: 1px solid rgba(232, 56, 56, 0.26);
+  border-radius: var(--radius-frame);
+  background:
+    linear-gradient(135deg, rgba(232, 56, 56, 0.13), rgba(232, 56, 56, 0.02) 55%),
+    rgba(255, 255, 255, 0.03);
+}
+
+.download-main p {
+  color: var(--muted);
+  line-height: 1.7;
+  max-width: 30em;
+}
+
+.download-divider {
+  align-self: stretch;
+  height: auto;
+}
+
+.specs {
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.specs > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.specs > div:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.specs dt {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.specs dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ---------- 页脚 ---------- */
+.site-footer {
+  border-top: 1px solid var(--line);
+  padding: 32px 0;
+}
+
+.footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.footer-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.footer-note {
+  font-size: 13px;
+  color: rgba(176, 166, 168, 0.75);
+}
+
+/* ---------- 入场动画 ---------- */
+.reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.reveal.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 900px) {
+  .hero {
+    padding: 64px 0 72px;
+  }
+
+  .hero-grid {
+    grid-template-columns: 1fr;
+    gap: 48px;
+  }
+
+  .hero-shot {
+    max-width: 480px;
+  }
+
+  .grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .steps {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .download-card {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+
+  .download-divider {
+    display: none;
+  }
+
+  .site-nav {
+    display: none;
+  }
+
+  .section {
+    padding: 72px 0;
+  }
+}
+
+@media (max-width: 560px) {
+  :root {
+    --page-pad: 20px;
+    --gap: 16px;
+  }
+
+  .hero h1 {
+    font-size: 38px;
+  }
+
+  .grid-4 {
+    grid-template-columns: 1fr;
+  }
+
+  .download-card {
+    padding: 28px 24px;
+  }
+
+  .faq-body {
+    padding-left: 24px;
+  }
+}
