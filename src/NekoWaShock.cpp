@@ -70,20 +70,8 @@ enum {
     P_LEFT_VOLUME,
     P_CIRC_PAN,
     P_SATURATION,
+    P_DRIVE,
     NUM_PARAMS
-};
-
-struct SliderDef { const char* name; const wchar_t* cn; float lo, hi; int param; int cx, cy, r; };
-
-// 按原版窗体的布局排列：Sep / Pan / Vol 竖直排列，LVol 与 RVol 在底部并列
-static const SliderDef g_sliders[NUM_PARAMS] = {
-    { "Volume",  L"音量",     -2.0f, 2.0f, P_VOLUME,        120, 234, 20 },
-    { "Panning", L"声像",     -1.0f, 1.0f, P_PAN,           120, 166, 18 },
-    { "Sep",     L"立体声",   -1.0f, 1.0f, P_SEPARATION,    120,  98, 18 },
-    { "RVolume", L"右声道",   -2.0f, 2.0f, P_RIGHT_VOLUME,  180, 300, 18 },
-    { "LVolume", L"左声道",   -2.0f, 2.0f, P_LEFT_VOLUME,    60, 300, 18 },
-    { "CircPan", L"圆形声像",  0.0f, 1.0f, P_CIRC_PAN,        0,   0,  0 },
-    { "Satur",   L"饱和模式",  0.0f, 3.0f, P_SATURATION,      0,   0,  0 }
 };
 
 static int g_dragY = 0;
@@ -105,6 +93,7 @@ struct Plugin {
         param[P_LEFT_VOLUME]  = 1.0f;
         param[P_CIRC_PAN]     = 0.0f;
         param[P_SATURATION]   = 0.0f;  // A = Default
+        param[P_DRIVE]        = 0.0f;  // 0 = 直通（与原版默认一致）
     }
 
     // 原插件旋钮范围 -2..+2，默认 1 = unity
@@ -146,10 +135,23 @@ static AEffect* g_effect = nullptr;
 static HWND g_hwnd = nullptr;
 static int g_drag = -1;
 static bool g_classReady = false;
-static ERect g_rect = { 0, 0, 420, 240 };
+static ERect g_rect = { 0, 0, 320, 360 };
 
-static const int kWidth = 240;
-static const int kHeight = 420;
+static const int kWidth = 360;
+static const int kHeight = 320;
+
+// 原版布局：左侧一个大旋钮，右侧 A/B/C/D 四档
+static const int kKnobCx = 138;
+static const int kKnobCy = 200;
+static const int kKnobR  = 80;
+static const int kAbcdX  = 226;
+static const int kAbcdY  = 180;
+static const int kAbcdStep = 28;
+
+// 宿主显示的参数名（VST2 限 8 字符）
+static const char* kParamNames[NUM_PARAMS] = {
+    "Volume", "Pan", "Separation", "RightVol", "LeftVol", "CircPan", "SatMode", "Drive"
+};
 
 static void notifyHost(Plugin* p, int idx) {
     if (g_host && g_effect) {
@@ -159,9 +161,25 @@ static void notifyHost(Plugin* p, int idx) {
     }
 }
 
+static void drawArc(HDC dc, int cx, int cy, int r, float a0, float a1, COLORREF col, int w) {
+    const int steps = 96;
+    POINT pts[97];
+    for (int i = 0; i <= steps; i++) {
+        float deg = a0 + (a1 - a0) * (float)i / steps;
+        float a = deg * 3.14159265f / 180.0f;
+        pts[i].x = cx + (int)(sinf(a) * r);
+        pts[i].y = cy - (int)(cosf(a) * r);
+    }
+    HPEN pen = CreatePen(PS_SOLID, w, col);
+    HPEN op = (HPEN)SelectObject(dc, pen);
+    Polyline(dc, pts, steps + 1);
+    SelectObject(dc, op);
+    DeleteObject(pen);
+}
+
 static void drawKnob(HDC dc, int cx, int cy, int r, float t, bool hot) {
     // 底座
-    HBRUSH outer = CreateSolidBrush(RGB(0x2C, 0x2C, 0x2C));
+    HBRUSH outer = CreateSolidBrush(RGB(0x2A, 0x2A, 0x2A));
     HBRUSH ob = (HBRUSH)SelectObject(dc, outer);
     HPEN op = (HPEN)SelectObject(dc, GetStockObject(NULL_PEN));
     Ellipse(dc, cx - r, cy - r, cx + r, cy + r);
@@ -169,11 +187,17 @@ static void drawKnob(HDC dc, int cx, int cy, int r, float t, bool hot) {
     SelectObject(dc, ob);
     DeleteObject(outer);
 
+    // 红色环形指示（原版的 LED 圈）：全周暗红 + 当前值亮红
+    drawArc(dc, cx, cy, r - 4, -135.0f, 135.0f, RGB(0x3C, 0x12, 0x12), 6);
+    if (t > 0.005f) {
+        drawArc(dc, cx, cy, r - 4, -135.0f, -135.0f + t * 270.0f, RGB(0xD8, 0x24, 0x24), 6);
+    }
+
     // 内盘
-    int ir = r - 6;
-    HBRUSH inner = CreateSolidBrush(hot ? RGB(0x3E, 0x2A, 0x2A) : RGB(0x1F, 0x1F, 0x1F));
+    int ir = r - 10;
+    HBRUSH inner = CreateSolidBrush(hot ? RGB(0x3A, 0x28, 0x28) : RGB(0x1C, 0x1C, 0x1C));
     ob = (HBRUSH)SelectObject(dc, inner);
-    HPEN ip = CreatePen(PS_SOLID, 1, RGB(0x4A, 0x4A, 0x4A));
+    HPEN ip = CreatePen(PS_SOLID, 1, RGB(0x44, 0x44, 0x44));
     op = (HPEN)SelectObject(dc, ip);
     Ellipse(dc, cx - ir, cy - ir, cx + ir, cy + ir);
     SelectObject(dc, op);
@@ -181,11 +205,26 @@ static void drawKnob(HDC dc, int cx, int cy, int r, float t, bool hot) {
     DeleteObject(ip);
     DeleteObject(inner);
 
-    // 指针：-135° .. +135°
+    // 刻度：-135° .. +135°
+    for (int i = 0; i <= 10; i++) {
+        float a = (-135.0f + i * 27.0f) * 3.14159265f / 180.0f;
+        int x0 = cx + (int)(sinf(a) * (ir - 4));
+        int y0 = cy - (int)(cosf(a) * (ir - 4));
+        int x1 = cx + (int)(sinf(a) * (ir - 12));
+        int y1 = cy - (int)(cosf(a) * (ir - 12));
+        HPEN tp = CreatePen(PS_SOLID, 1, RGB(0x4E, 0x4E, 0x4E));
+        HPEN tpOld = (HPEN)SelectObject(dc, tp);
+        MoveToEx(dc, x0, y0, nullptr);
+        LineTo(dc, x1, y1);
+        SelectObject(dc, tpOld);
+        DeleteObject(tp);
+    }
+
+    // 指针
     float ang = (-135.0f + t * 270.0f) * 3.14159265f / 180.0f;
-    int px = cx + (int)(sinf(ang) * (ir - 2));
-    int py = cy - (int)(cosf(ang) * (ir - 2));
-    HPEN pen = CreatePen(PS_SOLID, 3, RGB(0xE0, 0x40, 0x40));
+    int px = cx + (int)(sinf(ang) * (ir - 14));
+    int py = cy - (int)(cosf(ang) * (ir - 14));
+    HPEN pen = CreatePen(PS_SOLID, 3, RGB(0xE8, 0x38, 0x38));
     op = (HPEN)SelectObject(dc, pen);
     MoveToEx(dc, cx, cy, nullptr);
     LineTo(dc, px, py);
@@ -193,11 +232,11 @@ static void drawKnob(HDC dc, int cx, int cy, int r, float t, bool hot) {
     DeleteObject(pen);
 
     // 中心轴
-    HBRUSH hub = CreateSolidBrush(RGB(0xE0, 0x40, 0x40));
+    HBRUSH hub = CreateSolidBrush(RGB(0xE8, 0x38, 0x38));
     ob = (HBRUSH)SelectObject(dc, hub);
-    HPEN hp = CreatePen(PS_SOLID, 1, RGB(0xE0, 0x40, 0x40));
+    HPEN hp = CreatePen(PS_SOLID, 1, RGB(0xE8, 0x38, 0x38));
     op = (HPEN)SelectObject(dc, hp);
-    Ellipse(dc, cx - 2, cy - 2, cx + 3, cy + 3);
+    Ellipse(dc, cx - 3, cy - 3, cx + 4, cy + 4);
     SelectObject(dc, op);
     SelectObject(dc, ob);
     DeleteObject(hp);
@@ -206,7 +245,7 @@ static void drawKnob(HDC dc, int cx, int cy, int r, float t, bool hot) {
 
 static void paintEditor(HWND h, HDC dc, Plugin* p) {
     RECT full = { 0, 0, kWidth, kHeight };
-    HBRUSH bg = CreateSolidBrush(RGB(0x18, 0x18, 0x18));
+    HBRUSH bg = CreateSolidBrush(RGB(0x12, 0x12, 0x12));
     FillRect(dc, &full, bg);
     DeleteObject(bg);
 
@@ -216,92 +255,63 @@ static void paintEditor(HWND h, HDC dc, Plugin* p) {
 
     // 标题
     SetTextColor(dc, RGB(0xE8, 0x44, 0x44));
-    RECT tr = { 12, 10, kWidth - 12, 32 };
+    RECT tr = { 16, 10, kWidth - 16, 34 };
     DrawTextW(dc, L"NekoWaShock", -1, &tr, DT_LEFT | DT_SINGLELINE);
 
-    HPEN sepLine = CreatePen(PS_SOLID, 1, RGB(0x38, 0x38, 0x38));
+    SetTextColor(dc, RGB(0x6E, 0x6E, 0x6E));
+    RECT sr = { 16, 33, kWidth - 16, 51 };
+    DrawTextW(dc, L"YouWaShock 64-bit", -1, &sr, DT_LEFT | DT_SINGLELINE);
+
+    HPEN sepLine = CreatePen(PS_SOLID, 1, RGB(0x30, 0x30, 0x30));
     HPEN oldPen = (HPEN)SelectObject(dc, sepLine);
-    MoveToEx(dc, 12, 40, nullptr);
-    LineTo(dc, kWidth - 12, 40);
+    MoveToEx(dc, 16, 56, nullptr);
+    LineTo(dc, kWidth - 16, 56);
     SelectObject(dc, oldPen);
     DeleteObject(sepLine);
 
-    for (int i = 0; i < NUM_PARAMS; i++) {
-        const SliderDef& s = g_sliders[i];
-        if (s.param == P_CIRC_PAN || s.param == P_SATURATION) continue;
+    // 中央大旋钮：驱动量 0..1
+    float drive = p->param[P_DRIVE];
+    if (drive < 0.0f) drive = 0.0f;
+    if (drive > 1.0f) drive = 1.0f;
+    drawKnob(dc, kKnobCx, kKnobCy, kKnobR, drive, g_drag >= 0);
 
-        float v = p->param[s.param];
-        float t = (v - s.lo) / (s.hi - s.lo);
-        if (t < 0.0f) t = 0.0f;
-        if (t > 1.0f) t = 1.0f;
+    wchar_t val[64];
+    swprintf(val, 64, L"DRIVE  %d%%", (int)(drive * 100.0f + 0.5f));
+    SetTextColor(dc, RGB(0xD8, 0xD8, 0xD8));
+    RECT vr = { kKnobCx - 100, kKnobCy + kKnobR + 6, kKnobCx + 100, kKnobCy + kKnobR + 28 };
+    DrawTextW(dc, val, -1, &vr, DT_CENTER | DT_SINGLELINE);
 
-        drawKnob(dc, s.cx, s.cy, s.r, t, g_drag == i);
-
-        // 标签行：中文名 + 当前值
-        wchar_t line[64];
-        swprintf(line, 64, L"%s  %.2f", s.cn, v);
-        SetTextColor(dc, RGB(0xD0, 0xD0, 0xD0));
-        RECT lr = { s.cx - 46, s.cy - s.r - 21, s.cx + 46, s.cy - s.r - 3 };
-        DrawTextW(dc, line, -1, &lr, DT_CENTER | DT_SINGLELINE);
-    }
-
-    // 底部 L / R 声道标记
-    SetTextColor(dc, RGB(0x88, 0x88, 0x88));
-    RECT lL = { 14, 293, 38, 313 };
-    DrawTextW(dc, L"L", -1, &lL, DT_CENTER | DT_SINGLELINE);
-    RECT lR = { 202, 293, 226, 313 };
-    DrawTextW(dc, L"R", -1, &lR, DT_CENTER | DT_SINGLELINE);
-
-    HPEN sepLine2 = CreatePen(PS_SOLID, 1, RGB(0x38, 0x38, 0x38));
-    oldPen = (HPEN)SelectObject(dc, sepLine2);
-    MoveToEx(dc, 12, 334, nullptr);
-    LineTo(dc, kWidth - 12, 334);
-    SelectObject(dc, oldPen);
-    DeleteObject(sepLine2);
-
-    // Circular panning law 复选框
-    int cy = 348;
-    bool on = p->param[P_CIRC_PAN] >= 0.5f;
-    RECT box = { 30, cy, 46, cy + 16 };
-    HBRUSH fb = CreateSolidBrush(RGB(0x2E, 0x2E, 0x2E));
-    FillRect(dc, &box, fb);
-    DeleteObject(fb);
-    HBRUSH edge = CreateSolidBrush(on ? RGB(0xE0, 0x40, 0x40) : RGB(0x66, 0x66, 0x66));
-    FrameRect(dc, &box, edge);
-    DeleteObject(edge);
-    if (on) {
-        RECT in = { 34, cy + 4, 42, cy + 12 };
-        HBRUSH kb = CreateSolidBrush(RGB(0xE0, 0x40, 0x40));
-        FillRect(dc, &in, kb);
-        DeleteObject(kb);
-    }
-    SetTextColor(dc, on ? RGB(0xE8, 0x44, 0x44) : RGB(0xA0, 0xA0, 0xA0));
-    RECT cr = { 54, cy - 1, kWidth - 10, cy + 18 };
-    DrawTextW(dc, L"Circular panning law", -1, &cr, DT_LEFT | DT_SINGLELINE);
-
-    // 饱和模式 A B C D（原版 saturation mode 选择）
-    SetTextColor(dc, RGB(0x90, 0x90, 0x90));
-    RECT sl = { 14, 372, 62, 392 };
-    DrawTextW(dc, L"饱和", -1, &sl, DT_LEFT | DT_SINGLELINE);
-
+    // 右侧 A B C D 四档
     int satMode = (int)(p->param[P_SATURATION] + 0.5f);
     if (satMode < 0) satMode = 0;
     if (satMode > 3) satMode = 3;
 
+    HFONT abcdFont = CreateFontW(-22, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
+                                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                 CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+    HFONT prevFont = (HFONT)SelectObject(dc, abcdFont);
+
     for (int i = 0; i < 4; i++) {
-        int bx = 70 + i * 40;
-        RECT b = { bx, 370, bx + 34, 394 };
+        int bx = kAbcdX + i * kAbcdStep;
+        RECT b = { bx, kAbcdY, bx + 24, kAbcdY + 28 };
         bool sel = (satMode == i);
-        HBRUSH bb = CreateSolidBrush(sel ? RGB(0xE0, 0x40, 0x40) : RGB(0x2A, 0x2A, 0x2A));
-        FillRect(dc, &b, bb);
-        DeleteObject(bb);
-        HBRUSH be = CreateSolidBrush(sel ? RGB(0xE0, 0x40, 0x40) : RGB(0x5A, 0x5A, 0x5A));
-        FrameRect(dc, &b, be);
-        DeleteObject(be);
-        SetTextColor(dc, sel ? RGB(0xFF, 0xFF, 0xFF) : RGB(0xB8, 0xB8, 0xB8));
+        if (sel) {
+            HBRUSH bb = CreateSolidBrush(RGB(0x38, 0x14, 0x14));
+            FillRect(dc, &b, bb);
+            DeleteObject(bb);
+        }
+        SetTextColor(dc, sel ? RGB(0xFF, 0x7A, 0x2A) : RGB(0x8A, 0x8A, 0x8A));
         wchar_t ch[2] = { (wchar_t)(L'A' + i), 0 };
         DrawTextW(dc, ch, -1, &b, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     }
+
+    SelectObject(dc, prevFont);
+    DeleteObject(abcdFont);
+
+    // 左下帮助标记
+    SetTextColor(dc, RGB(0x5A, 0x5A, 0x5A));
+    RECT hb = { 16, kHeight - 30, 40, kHeight - 10 };
+    DrawTextW(dc, L"[?]", -1, &hb, DT_LEFT | DT_SINGLELINE);
 
     SelectObject(dc, old);
 }
@@ -318,6 +328,11 @@ static LRESULT CALLBACK EditorProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_ERASEBKGND:
         return 1;
+    case WM_PRINTCLIENT: {
+        // 供截图/打印：把界面画到外部传入的 DC
+        if (p) paintEditor(h, (HDC)wp, p);
+        return 0;
+    }
     case WM_PAINT: {
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(h, &ps);
@@ -330,53 +345,37 @@ static LRESULT CALLBACK EditorProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         int x = (int)(short)LOWORD(lp);
         int y = (int)(short)HIWORD(lp);
 
-        // 复选框区域
-        if (x >= 24 && x <= kWidth - 8 && y >= 342 && y <= 374) {
-            p->param[P_CIRC_PAN] = (p->param[P_CIRC_PAN] >= 0.5f) ? 0.0f : 1.0f;
-            notifyHost(p, P_CIRC_PAN);
-            InvalidateRect(h, nullptr, FALSE);
-            return 0;
-        }
-
-        // 饱和模式 A/B/C/D 按钮
-        if (y >= 366 && y <= 398) {
-            for (int i = 0; i < 4; i++) {
-                int bx = 70 + i * 40;
-                if (x >= bx && x <= bx + 34) {
-                    p->param[P_SATURATION] = (float)i;
-                    notifyHost(p, P_SATURATION);
-                    InvalidateRect(h, nullptr, FALSE);
-                    return 0;
-                }
-            }
-        }
-
-        // 圆形命中测试
-        for (int i = 0; i < NUM_PARAMS; i++) {
-            const SliderDef& s = g_sliders[i];
-            if (s.param == P_CIRC_PAN || s.param == P_SATURATION) continue;
-            int dx = x - s.cx;
-            int dy = y - s.cy;
-            if (dx * dx + dy * dy <= s.r * s.r) {
-                g_drag = i;
-                g_dragY = y;
-                g_dragT = (p->param[s.param] - s.lo) / (s.hi - s.lo);
-                SetCapture(h);
+        // 右侧 A/B/C/D 四档（原版：点击字母切换饱和档位）
+        for (int i = 0; i < 4; i++) {
+            int bx = kAbcdX + i * kAbcdStep;
+            if (x >= bx - 4 && x <= bx + 26 && y >= kAbcdY - 4 && y <= kAbcdY + 28) {
+                p->param[P_SATURATION] = (float)i;
+                notifyHost(p, P_SATURATION);
                 InvalidateRect(h, nullptr, FALSE);
                 return 0;
             }
         }
+
+        // 中央大旋钮：驱动量
+        int dx = x - kKnobCx;
+        int dy = y - kKnobCy;
+        if (dx * dx + dy * dy <= kKnobR * kKnobR) {
+            g_drag = 0;
+            g_dragY = y;
+            g_dragT = p->param[P_DRIVE];
+            SetCapture(h);
+            InvalidateRect(h, nullptr, FALSE);
+        }
         return 0;
     }
     case WM_MOUSEMOVE: {
-        if (p && g_drag >= 0) {
-            const SliderDef& s = g_sliders[g_drag];
+        if (p && g_drag == 0) {
             int y = (int)(short)HIWORD(lp);
-            float t = g_dragT + (float)(g_dragY - y) / 160.0f;
+            float t = g_dragT + (float)(g_dragY - y) / 200.0f;
             if (t < 0.0f) t = 0.0f;
             if (t > 1.0f) t = 1.0f;
-            p->param[s.param] = s.lo + t * (s.hi - s.lo);
-            notifyHost(p, s.param);
+            p->param[P_DRIVE] = t;
+            notifyHost(p, P_DRIVE);
             InvalidateRect(h, nullptr, FALSE);
         }
         return 0;
@@ -439,17 +438,24 @@ static void doProcess(Plugin* p, float** in, float** out, VstInt32 n) {
     if (satMode < 0) satMode = 0;
     if (satMode > 3) satMode = 3;
 
-    // 各档驱动量 k 与输出补偿 trim。
-    // 关键：k * trim ≈ 1，使小信号增益接近 1（不会只是变响），
-    // 而大信号被 softClip 压缩，产生实际谐波。
-    float satK = 0.0f;
-    float satTrim = 1.0f;
+    // 驱动量来自界面上的大旋钮（0..1）。
+    // 各档位决定最大过载倍数 kmax；trim = 1/k 保证小信号增益恒为 1，
+    // 只有大信号才被软削波压缩并产生谐波，避免「只是变响」。
+    float drive = p->param[P_DRIVE];
+    if (drive < 0.0f) drive = 0.0f;
+    if (drive > 1.0f) drive = 1.0f;
+
+    float kmax = 1.0f;
     switch (satMode) {
-        case 0:  satK = 2.5f;  satTrim = 0.420f; break; // A 默认：轻度过载
-        case 1:  satK = 0.0f;  satTrim = 1.000f; break; // B 不饱和：直通
-        case 2:  satK = 5.0f;  satTrim = 0.210f; break; // C 饱和 A
-        default: satK = 10.0f; satTrim = 0.105f; break; // D 饱和 B
+        case 0:  kmax = 3.0f;  break;  // A 默认
+        case 1:  kmax = 1.0f;  break;  // B 不饱和
+        case 2:  kmax = 6.0f;  break;  // C 饱和 A
+        default: kmax = 12.0f; break;  // D 饱和 B
     }
+
+    float satK = 1.0f + drive * (kmax - 1.0f);
+    float satTrim = 1.0f / satK;
+    bool doSat = (satMode != 1) && (drive > 0.0001f);
 
     for (VstInt32 i = 0; i < n; i++) {
         gl += (targetL - gl) * k;
@@ -467,7 +473,7 @@ static void doProcess(Plugin* p, float** in, float** out, VstInt32 n) {
             r = m - s;
         }
 
-        if (satK > 0.0f) {
+        if (doSat) {
             l = softClip(l * satK) * satTrim;
             r = softClip(r * satK) * satTrim;
         }
@@ -527,8 +533,8 @@ static VstIntPtr vstDispatcher(AEffect* e, VstInt32 op, VstInt32 index,
 
     case effGetParamName:
         if (index >= 0 && index < NUM_PARAMS) {
-            strncpy((char*)ptr, g_sliders[index].name, 8);
-            ((char*)ptr)[7] = 0;
+            strncpy((char*)ptr, kParamNames[index], 8);
+            ((char*)ptr)[8] = 0;
         }
         return 0;
     case effGetParamLabel:
@@ -544,6 +550,8 @@ static VstIntPtr vstDispatcher(AEffect* e, VstInt32 op, VstInt32 index,
                 if (m < 0) m = 0;
                 if (m > 3) m = 3;
                 strcpy((char*)ptr, names[m]);
+            } else if (index == P_DRIVE) {
+                snprintf((char*)ptr, 32, "%d%%", (int)(p->param[index] * 100.0f + 0.5f));
             } else {
                 snprintf((char*)ptr, 32, "%.2f", p->param[index]);
             }
